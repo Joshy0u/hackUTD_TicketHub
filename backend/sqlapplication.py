@@ -1,12 +1,20 @@
-
 #!/usr/bin/env python3
 """
 dc_datacenter_path_api.py
 
-Flask service that:
-- Connects to a Postgres database.
-- Creates tables for datacenters, aisles, racks, servers, datacenter_cell.
-- Uses a fixed 10x9 grid layout for a single datacenter:
+All-in-one Flask service that:
+
+- Connects to your Amazon RDS PostgreSQL instance.
+- Ensures the database 'datacenter_db' exists (creates it if needed).
+- Ensures schema tables exist.
+- Ensures a single fixed-layout datacenter exists (creates if needed).
+- Provides APIs for:
+    - managing servers
+    - listing servers
+    - computing shortest paths from door to a server's rack
+    - ASCII visualization of the path.
+
+Layout (10x9):
 
   Row 0: WWWWWWWWWW
   Row 1: WBBWBBWBBW
@@ -18,18 +26,9 @@ Flask service that:
   Row 7: WWWWWWWWWW
   Row 8: DWWWWWWWWW
 
-  W = free space
-  B = rack space (each B is its own rack, up to 8 servers)
-  D = door (entry point, treated as free)
-
-Endpoints:
-- POST   /init_datacenter               -> ensure layout exists; return existing DC info
-- POST   /servers                       -> add a server into a rack (with slot 1..8)
-- DELETE /servers/<hostname>            -> delete a server by hostname
-- GET    /path/<int:server_id>          -> shortest path from door to that server's rack (by ID)
-- GET    /path/hostname/<hostname>      -> same, by hostname
-- GET    /visualize/<int:server_id>     -> ASCII map with path overlay (by ID)
-- GET    /visualize/hostname/<hostname> -> same, by hostname
+W = free space
+B = rack (each B is its own rack, up to 8 servers)
+D = door (entry point at x=0,y=8, treated as free)
 """
 
 import os
@@ -42,13 +41,19 @@ import psycopg2
 # Config
 # =========================
 
-DB_HOST = os.environ.get("DB_HOST", "localhost")
+# Your RDS endpoint (default), can still be overridden with DB_HOST env var if needed.
+DB_HOST = os.environ.get(
+    "DB_HOST",
+    "database-1.csfc6cuael0m.us-east-1.rds.amazonaws.com"
+)
 DB_PORT = int(os.environ.get("DB_PORT", "5432"))
+
+# The logical database that this app uses inside the RDS instance
 DB_NAME = os.environ.get("DB_NAME", "datacenter_db")
 
-# Hardcoded defaults (can still be overridden via env vars if you want)
+# RDS user credentials (defaults to your provided values)
 DB_USER = os.environ.get("DB_USER", "postgres")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "CREDS :)")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "cREDS :)")
 
 # Door (entry) coordinates in our fixed layout
 ENTRY_X = 0
@@ -62,6 +67,7 @@ app = Flask(__name__)
 # =========================
 
 def get_conn():
+    """Connect to the application database (datacenter_db)."""
     return psycopg2.connect(
         host=DB_HOST,
         port=DB_PORT,
@@ -71,8 +77,32 @@ def get_conn():
     )
 
 
+def ensure_database_exists():
+    """
+    Ensure the logical database DB_NAME exists on the RDS instance.
+    Connects to the maintenance 'postgres' DB, creates DB_NAME if needed.
+    """
+    maintenance_db = "postgres"
+    conn = psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        dbname=maintenance_db,
+        user=DB_USER,
+        password=DB_PASSWORD,
+    )
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM pg_database WHERE datname = %s;", (DB_NAME,))
+                exists = cur.fetchone()
+                if not exists:
+                    cur.execute(f'CREATE DATABASE "{DB_NAME}";')
+    finally:
+        conn.close()
+
+
 def init_schema():
-    """Create schema tables if they don't exist."""
+    """Create schema tables if they don't exist in DB_NAME."""
     ddl_statements = [
 
         # Datacenter
@@ -173,12 +203,15 @@ def ensure_datacenter_exists():
     {
       "datacenter_id": ...,
       "entry": {"x": ..., "y": ...},
-      "rack_count": ...
+      "rack_count": ...,
+      "created": True/False
     }
     """
     global ENTRY_X, ENTRY_Y
 
+    ensure_database_exists()
     init_schema()
+
     conn = get_conn()
     try:
         with conn:
@@ -392,7 +425,6 @@ def find_goal_cell_for_server(conn, server_id):
     Returns (datacenter_id, (goal_x, goal_y)) or None.
     """
     with conn.cursor() as cur:
-        # Get rack and datacenter
         cur.execute(
             """
             SELECT s.rack_id, a.datacenter_id
@@ -408,7 +440,6 @@ def find_goal_cell_for_server(conn, server_id):
             return None
         rack_id, datacenter_id = row
 
-        # Ensure rack has at least one mapped cell
         cur.execute(
             """
             SELECT x, y
@@ -423,7 +454,6 @@ def find_goal_cell_for_server(conn, server_id):
         if not rack_cells:
             return None
 
-        # Find any FREE cell adjacent to a rack cell
         cur.execute(
             """
             SELECT DISTINCT c2.x, c2.y
@@ -462,7 +492,6 @@ def create_server_with_location(conn, rack_id, hostname, serial_number, slot=Non
     Returns (server_id, assigned_slot).
     """
     with conn.cursor() as cur:
-        # Check rack + get max_servers
         cur.execute(
             "SELECT max_servers FROM rack WHERE rack_id = %s;",
             (rack_id,)
@@ -472,7 +501,6 @@ def create_server_with_location(conn, rack_id, hostname, serial_number, slot=Non
             raise ValueError(f"Rack {rack_id} does not exist.")
         (max_servers,) = row
 
-        # Check hostname/serial uniqueness
         cur.execute(
             """
             SELECT 1
@@ -484,7 +512,6 @@ def create_server_with_location(conn, rack_id, hostname, serial_number, slot=Non
         if cur.fetchone():
             raise ValueError("Hostname or serial_number already in use.")
 
-        # Find used slots
         cur.execute(
             "SELECT slot FROM server WHERE rack_id = %s ORDER BY slot;",
             (rack_id,)
@@ -492,7 +519,6 @@ def create_server_with_location(conn, rack_id, hostname, serial_number, slot=Non
         used_slots = [r[0] for r in cur.fetchall()]
 
         if slot is None:
-            # pick first free slot
             assigned_slot = None
             for s in range(1, max_servers + 1):
                 if s not in used_slots:
@@ -501,14 +527,12 @@ def create_server_with_location(conn, rack_id, hostname, serial_number, slot=Non
             if assigned_slot is None:
                 raise ValueError(f"Rack {rack_id} is full.")
         else:
-            # validate slot
             if slot < 1 or slot > max_servers:
                 raise ValueError(f"Slot must be between 1 and {max_servers}.")
             if slot in used_slots:
                 raise ValueError(f"Slot {slot} is already occupied on rack {rack_id}.")
             assigned_slot = slot
 
-        # Insert server
         cur.execute(
             """
             INSERT INTO server (rack_id, hostname, serial_number, slot)
@@ -551,7 +575,7 @@ def add_server():
       "rack_id": 123,
       "hostname": "web-01",
       "serial_number": "SN-ABC-123",
-      "slot": 3   # optional, if omitted first free slot 1..8 is used
+      "slot": 3   # optional; if omitted, first free slot 1..8 is used
     }
     """
     ensure_datacenter_exists()
@@ -628,6 +652,106 @@ def delete_server(hostname):
             "rack_id": rack_id,
             "hostname": hostname,
             "slot": slot
+        })
+
+    finally:
+        conn.close()
+
+
+@app.route("/servers/list", methods=["GET"])
+def list_servers():
+    """
+    List all servers currently on racks in the (single) datacenter.
+
+    Returns JSON like:
+    {
+      "status": "ok",
+      "servers": [
+        {
+          "server_id": 1,
+          "hostname": "srv-1",
+          "serial_number": "SN-0001",
+          "slot": 1,
+          "rack": {
+            "id": 3,
+            "label": "R3"
+          },
+          "aisle": {
+            "id": 1,
+            "label": "A1"
+          },
+          "datacenter": {
+            "id": 1,
+            "name": "DC-FIXED"
+          }
+        },
+        ...
+      ]
+    }
+    """
+    ensure_datacenter_exists()
+
+    conn = get_conn()
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT
+                        s.server_id,
+                        s.hostname,
+                        s.serial_number,
+                        s.slot,
+                        r.rack_id,
+                        r.label AS rack_label,
+                        a.aisle_id,
+                        a.label AS aisle_label,
+                        d.datacenter_id,
+                        d.name AS datacenter_name
+                    FROM server s
+                    JOIN rack r ON r.rack_id = s.rack_id
+                    JOIN aisle a ON a.aisle_id = r.aisle_id
+                    JOIN datacenter d ON d.datacenter_id = a.datacenter_id
+                    ORDER BY d.datacenter_id, a.aisle_id, r.rack_id, s.slot;
+                    """
+                )
+                rows = cur.fetchall()
+
+        servers = []
+        for (
+            server_id,
+            hostname,
+            serial_number,
+            slot,
+            rack_id,
+            rack_label,
+            aisle_id,
+            aisle_label,
+            dc_id,
+            dc_name,
+        ) in rows:
+            servers.append({
+                "server_id": server_id,
+                "hostname": hostname,
+                "serial_number": serial_number,
+                "slot": slot,
+                "rack": {
+                    "id": rack_id,
+                    "label": rack_label,
+                },
+                    "aisle": {
+                    "id": aisle_id,
+                    "label": aisle_label,
+                },
+                "datacenter": {
+                    "id": dc_id,
+                    "name": dc_name,
+                },
+            })
+
+        return jsonify({
+            "status": "ok",
+            "servers": servers
         })
 
     finally:
@@ -756,7 +880,6 @@ def visualize(server_id):
         path = astar(start, goal, grid)
         path_set = set(path) if path else set()
 
-        # Determine bounds from the grid
         xs = [x for (x, _) in grid.keys()]
         ys = [y for (_, y) in grid.keys()]
         min_x, max_x = min(xs), max(xs)
@@ -784,7 +907,6 @@ def visualize(server_id):
             lines.append(" ".join(row_chars))
 
         ascii_map = "\n".join(lines) + "\n"
-
         return Response(ascii_map, mimetype="text/plain")
 
     finally:
@@ -816,12 +938,29 @@ def visualize_by_hostname(hostname):
     return visualize(server_id)
 
 
+@app.route("/health", methods=["GET"])
+def health():
+    """
+    Simple health check: verifies DB connection and datacenter existence.
+    """
+    try:
+        info = ensure_datacenter_exists()
+        return jsonify({
+            "status": "ok",
+            "datacenter_id": info["datacenter_id"],
+            "entry": info["entry"],
+            "racks": info["rack_count"]
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 # =========================
 # Main
 # =========================
 
 if __name__ == "__main__":
-    # Auto-init the datacenter ON STARTUP (will only create it once ever in the DB)
+    # Auto-init the database + datacenter ON STARTUP (idempotent)
     try:
         info = ensure_datacenter_exists()
         print(
@@ -834,3 +973,4 @@ if __name__ == "__main__":
 
     # Bind to 0.0.0.0 so it’s reachable on EC2; default port 8000
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "8000")))
+
