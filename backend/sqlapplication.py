@@ -35,6 +35,7 @@ import os
 from heapq import heappush, heappop
 
 from flask import Flask, jsonify, request, Response
+from flask_cors import CORS
 import psycopg2
 
 # =========================
@@ -60,7 +61,7 @@ ENTRY_X = 0
 ENTRY_Y = 8
 
 app = Flask(__name__)
-
+CORS(app)
 
 # =========================
 # DB helpers
