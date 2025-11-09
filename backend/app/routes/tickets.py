@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, request
 from sqlalchemy import desc
 from datetime import datetime
 from ..database import get_db
-from ..models import BadLog  # updated import
+from ..models import BadLog
 
 bad_logs = Blueprint('bad_logs', __name__)
 
@@ -12,7 +12,6 @@ def get_logs():
     with get_db() as db:
         query = db.query(BadLog)
 
-        # Optional filters
         label = request.args.get('label')
         hostname = request.args.get('hostname')
 
@@ -55,7 +54,7 @@ def create_log():
 
     with get_db() as db:
         db.add(new_log)
-        db.flush()  # ensures ID is generated before commit
+        db.flush()
         return jsonify(new_log.to_dict()), 201
 
 
@@ -71,7 +70,7 @@ def update_log(log_id):
         if not log:
             return jsonify({'error': 'Log not found'}), 404
 
-        # Update fields if provided
+        # Update fieldsS
         if 'upload_ts' in data:
             log.upload_ts = data['upload_ts']
         if 'hostname' in data:

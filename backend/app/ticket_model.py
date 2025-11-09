@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, func, Index
 from datetime import datetime
-from .database import Base  # assuming your Base is defined in database.py
+from .database import Base
 
 class BadLog(Base):
     __tablename__ = "bad_logs"
@@ -8,11 +8,11 @@ class BadLog(Base):
     # Primary key
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    # When the log was created (server time)
+    # When the log was created
     logged_at = Column(
         DateTime(timezone=True),
         nullable=False,
-        server_default=func.now(),  # equivalent to DEFAULT NOW()
+        server_default=func.now(),
         index=True
     )
 
@@ -22,13 +22,11 @@ class BadLog(Base):
     # Machine / host name
     hostname = Column(Text, nullable=False, index=True)
 
-    # Reason for log (e.g. "BADMEMORY_3") — note: single underscore
     label = Column(Text, nullable=False, index=True)
 
     # Raw log line content
     log_line = Column(Text, nullable=False)
 
-    # Optional: add index for common lookups
     __table_args__ = (
         Index('idx_badlogs_label_host', 'label', 'hostname'),
     )
