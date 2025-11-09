@@ -1,63 +1,48 @@
-from sqlalchemy import Column, Integer, String, DateTime, Enum, Index
+from sqlalchemy import Column, Integer, String, DateTime, Text, func, Index
 from datetime import datetime
-from .database import Base
+from .database import Base  # assuming your Base is defined in database.py
 
-class Ticket(Base):
-    __tablename__ = "tickets"
+class BadLog(Base):
+    __tablename__ = "bad_logs"
 
     # Primary key
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
-    # Core fields with constraints
-    status = Column(
-        String(10),
+
+    # When the log was created (server time)
+    logged_at = Column(
+        DateTime(timezone=True),
         nullable=False,
-        index=True,
-        default="Open"
-    )
-    user = Column(String(50), nullable=False, index=True)
-    title = Column(String(50), nullable=False)
-    desc = Column(String(255), nullable=False)
-    
-    # Priority fields
-    priorityGiven = Column(
-        String(50),
-        nullable=False,
-        default="Normal",
-        index=True
-    )
-    estimatedPriority = Column(
-        Integer,
-        default=0,
-        index=True
-    )
-    
-    # Timestamp
-    created_at = Column(
-        DateTime,
-        nullable=False,
-        default=datetime.utcnow,
+        server_default=func.now(),  # equivalent to DEFAULT NOW()
         index=True
     )
 
-    # Add composite index for common queries
+    # When it was uploaded (optional text timestamp)
+    uploadts = Column(Text, nullable=False)
+
+    # Machine / host name
+    hostname = Column(Text, nullable=False, index=True)
+
+    # Reason for log (e.g. "BADMEMORY_3") — note: single underscore
+    label = Column(Text, nullable=False, index=True)
+
+    # Raw log line content
+    log_line = Column(Text, nullable=False)
+
+    # Optional: add index for common lookups
     __table_args__ = (
-        Index('idx_status_priority', 'status', 'estimatedPriority'),
+        Index('idx_badlogs_label_host', 'label', 'hostname'),
     )
 
     def __repr__(self):
-        return f"<Ticket {self.id} - {self.user} - {self.estimatedPriority}>"
+        return f"<BadLog {self.id} - {self.hostname or 'unknown'} - {self.label or 'no_label'}>"
 
     def to_dict(self):
-        """Convert ticket to dictionary for API responses"""
+        """Convert log record to dict (for API responses or JSON serialization)"""
         return {
-            'id': self.id,
-            'status': self.status,
-            'user': self.user,
-            'title': self.title,
-            'description': self.desc,
-            'priority_given': self.priorityGiven,
-            'estimated_priority': self.estimatedPriority,
-            'created_at': self.created_at.isoformat()
+            "id": self.id,
+            "logged_at": self.logged_at.isoformat() if self.logged_at else None,
+            "uploadts": self.uploadts,
+            "hostname": self.hostname,
+            "label": self.label,
+            "log_line": self.log_line,
         }
-

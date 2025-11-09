@@ -1,6 +1,6 @@
 # init_db.py
 from app.database import init_db  # adjust the import to where init_db() lives
-from app.ticket_model import Ticket
+from app.ticket_model import BadLog
 
 if __name__ == "__main__":
     print("🔧 Initializing database...")

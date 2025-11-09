@@ -21,35 +21,25 @@ export default function TicketForm({ open, setOpen, onSubmit }: any) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md rounded-xl shadow-lg bg-card">
         <DialogHeader>
-          <DialogTitle>Create New Ticket</DialogTitle>
+          <DialogTitle className="text-lg font-semibold">
+            Create New Ticket
+          </DialogTitle>
         </DialogHeader>
+
         <div className="space-y-5">
-          {/* Title */}
           <div className="space-y-2">
             <Label>Title</Label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Server overheating in rack 4A"
-            />
+            <Input placeholder="Server overheating in rack 4A" />
           </div>
-
-          {/* Description */}
           <div className="space-y-2">
             <Label>Description</Label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Include details, affected servers, etc."
-            />
+            <Textarea placeholder="Include details, affected servers, etc." />
           </div>
-
-          {/* Priority */}
           <div className="space-y-2">
             <Label>Priority</Label>
-            <Select value={priority} onValueChange={setPriority}>
+            <Select>
               <SelectTrigger>
                 <SelectValue placeholder="Select priority" />
               </SelectTrigger>
@@ -60,8 +50,7 @@ export default function TicketForm({ open, setOpen, onSubmit }: any) {
               </SelectContent>
             </Select>
           </div>
-
-          <Button onClick={handleSubmit} className="w-full mt-2">
+          <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
             Submit Ticket
           </Button>
         </div>

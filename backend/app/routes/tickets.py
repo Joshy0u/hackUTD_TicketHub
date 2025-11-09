@@ -1,91 +1,96 @@
 from flask import Blueprint, jsonify, request
+from sqlalchemy import desc
 from datetime import datetime
 from ..database import get_db
-from ..ticket_model import Ticket
-from sqlalchemy import desc
+from ..models import BadLog  # updated import
 
-tickets = Blueprint('tickets', __name__)
+bad_logs = Blueprint('bad_logs', __name__)
 
-@tickets.route('/tickets', methods=['GET'])
-def get_tickets():
-    """Get all tickets, optionally filtered by priority or status"""
+@bad_logs.route('/logs', methods=['GET'])
+def get_logs():
+    """Get all logs, optionally filtered by label or hostname"""
     with get_db() as db:
-        query = db.query(Ticket)
-        
-        # Filter by priority if provided
-        priority = request.args.get('priority')
-        if priority:
-            query = query.filter(Ticket.priorityGiven == priority)
-            
-        # Order by estimated priority (highest first)
-        query = query.order_by(desc(Ticket.estimatedPriority))
-        
-        tickets_list = query.all()
-        return jsonify([ticket.to_dict() for ticket in tickets_list]), 200
+        query = db.query(BadLog)
 
-@tickets.route('/tickets/<int:ticket_id>', methods=['GET'])
-def get_ticket(ticket_id):
-    """Get a specific ticket by ID"""
+        # Optional filters
+        label = request.args.get('label')
+        hostname = request.args.get('hostname')
+
+        if label:
+            query = query.filter(BadLog.label == label)
+        if hostname:
+            query = query.filter(BadLog.hostname == hostname)
+
+        # Order by most recent
+        query = query.order_by(desc(BadLog.logged_at))
+
+        logs = query.all()
+        return jsonify([log.to_dict() for log in logs]), 200
+
+
+@bad_logs.route('/logs/<int:log_id>', methods=['GET'])
+def get_log(log_id):
+    """Get a specific log entry by ID"""
     with get_db() as db:
-        ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-        if not ticket:
-            return jsonify({'error': 'Ticket not found'}), 404
-        return jsonify(ticket.to_dict()), 200
+        log = db.query(BadLog).filter(BadLog.id == log_id).first()
+        if not log:
+            return jsonify({'error': 'Log not found'}), 404
+        return jsonify(log.to_dict()), 200
 
-@tickets.route('/tickets', methods=['POST'])
-def create_ticket():
-    """Create a new ticket"""
+
+@bad_logs.route('/logs', methods=['POST'])
+def create_log():
+    """Create a new log entry"""
     data = request.get_json()
     if not data:
         return jsonify({'error': 'No data provided'}), 400
-    
-    # Create new ticket
-    new_ticket = Ticket(
-        status='Open',  # Default status for new tickets
-        title=data.get('title', 'Untitled'),
-        desc=data.get('content', ''),  # Using 'content' as in original code
-        user=data.get('user', 'Anonymous'),
-        priorityGiven=data.get('priorityGiven', 'Normal'),
-        estimatedPriority=int(data.get('estimatedPriority', 0))
+
+    # Create new BadLog entry
+    new_log = BadLog(
+        uploadts=data.get('uploadts'),
+        hostname=data.get('hostname'),
+        label=data.get('label'),
+        log_line=data.get('log_line'),
     )
-    
-    # Save to database
-    with get_db() as db:
-        db.add(new_ticket)
-        db.flush()  # Get the ID before commit
-        return jsonify(new_ticket.to_dict()), 201
 
-@tickets.route('/tickets/<int:ticket_id>', methods=['PUT'])
-def update_ticket(ticket_id):
-    """Update an existing ticket"""
+    with get_db() as db:
+        db.add(new_log)
+        db.flush()  # ensures ID is generated before commit
+        return jsonify(new_log.to_dict()), 201
+
+
+@bad_logs.route('/logs/<int:log_id>', methods=['PUT'])
+def update_log(log_id):
+    """Update an existing log"""
     data = request.get_json()
     if not data:
         return jsonify({'error': 'No data provided'}), 400
-        
-    with get_db() as db:
-        ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-        if not ticket:
-            return jsonify({'error': 'Ticket not found'}), 404
-            
-        # Update fields if provided
-        if 'status' in data:
-            ticket.status = data['status']
-        if 'priorityGiven' in data:
-            ticket.priorityGiven = data['priorityGiven']
-        if 'estimatedPriority' in data:
-            ticket.estimatedPriority = int(data['estimatedPriority'])
-        if 'content' in data:
-            ticket.desc = data['content']
-            
-        return jsonify(ticket.to_dict()), 200
 
-@tickets.route('/tickets/<int:ticket_id>', methods=['DELETE'])
-def delete_ticket(ticket_id):
-    """Delete a ticket"""
     with get_db() as db:
-        ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-        if not ticket:
-            return jsonify({'error': 'Ticket not found'}), 404
-            
-        db.delete(ticket)
-        return jsonify({'message': 'Ticket deleted successfully'}), 200
+        log = db.query(BadLog).filter(BadLog.id == log_id).first()
+        if not log:
+            return jsonify({'error': 'Log not found'}), 404
+
+        # Update fields if provided
+        if 'uploadts' in data:
+            log.uploadts = data['uploadts']
+        if 'hostname' in data:
+            log.hostname = data['hostname']
+        if 'label' in data:
+            log.label = data['label']
+        if 'log_line' in data:
+            log.log_line = data['log_line']
+
+        return jsonify(log.to_dict()), 200
+
+
+@bad_logs.route('/logs/<int:log_id>', methods=['DELETE'])
+def delete_log(log_id):
+    """Delete a log entry"""
+    with get_db() as db:
+        log = db.query(BadLog).filter(BadLog.id == log_id).first()
+        if not log:
+            return jsonify({'error': 'Log not found'}), 404
+
+        db.delete(log)
+        return jsonify({'message': 'Log deleted successfully'}), 200

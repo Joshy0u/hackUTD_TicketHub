@@ -57,7 +57,8 @@ def make_app():
         )
 
     # --- Register blueprints ---
-    from .routes.tickets import tickets
-    app.register_blueprint(tickets, url_prefix="/tickets")
+    # The tickets module exposes the `bad_logs` blueprint (reflecting the bad_logs table)
+    from .routes.tickets import bad_logs
+    app.register_blueprint(bad_logs)
 
     return app

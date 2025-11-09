@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-export default function App() {
+export default function Dashboard() {
   const [tickets, setTickets] = React.useState<any[]>([])
   const [open, setOpen] = React.useState(false)
   const [role, setRole] = React.useState("Engineer")
