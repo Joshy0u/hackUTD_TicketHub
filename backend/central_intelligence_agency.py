@@ -7,15 +7,13 @@ Flask server that:
 - Saves the incoming file
 - Loads the trained model from log_reason_full.pkl (via joblib)
 - Scans file line-by-line and classifies each line using model.predict([line])[0]
-- Writes NON-GOOD_LOG lines in this format:
-    1. <timestamp> <hostname> <label>
-    2. <original log line>
+- Writes NON-GOOD_LOG lines in non_good_logs.txt
+- Prints every analyzed line and its label to the console
 """
 
 from datetime import datetime
 from pathlib import Path
 import sys
-
 from flask import Flask, request, jsonify
 import joblib
 
@@ -39,7 +37,7 @@ except Exception as e:
 
 
 def classify_line(line: str):
-    """Predict tag for a single log line, using the same pattern as predict_interactive.py."""
+    """Predict tag for a single log line."""
     if model is None:
         return None
     try:
@@ -62,7 +60,6 @@ def upload_logs():
     hostname = request.form.get("hostname", "unknown_host")
     timestamp = request.form.get("timestamp", datetime.utcnow().strftime("%Y%m%d_%H%M%S"))
 
-    # Safe versions (used in filenames only)
     safe_hostname = (
         hostname.replace(" ", "_")
         .replace("/", "_")
@@ -75,7 +72,6 @@ def upload_logs():
     out_name = f"{safe_hostname}_{safe_timestamp}_{original_name}"
     out_path = RECEIVED_DIR / out_name
 
-    # Save the uploaded log file
     uploaded_file.save(out_path)
     print(f"[recv] {out_name} ({out_path.stat().st_size} bytes) from {hostname}")
 
@@ -93,19 +89,19 @@ def upload_logs():
 
             lines_scanned += 1
             label = classify_line(line)
-
-            # If prediction failed completely, skip logging it (or you can log as PREDICT_ERROR)
             if label is None:
                 continue
 
-            # GOOD_LOG vs non-GOOD_LOG check (same idea as before, but robust to case)
-            if str(label).upper().startswith("GOOD_LOG"):
-                continue  # ignore good logs
+            # Print every line analyzed
+            print(f"[ANALYZE] {hostname} | {label} | {line}")
 
-            # Write two-line entry: reason line, then original log line, then blank
+            if str(label).upper().startswith("GOOD_LOG"):
+                continue
+
             f_out.write(f"{timestamp} {hostname} {label}\n{line}\n\n")
             non_good_count += 1
 
+    print(f"[done] {lines_scanned} lines processed, {non_good_count} non-GOOD logs detected.")
     return jsonify({
         "received_file": out_name,
         "lines_scanned": lines_scanned,
@@ -115,3 +111,4 @@ def upload_logs():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=False)
+
