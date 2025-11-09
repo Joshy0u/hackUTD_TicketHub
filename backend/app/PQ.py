@@ -1,31 +1,22 @@
-import heapq
-import itertools
-import string
+from sqlalchemy import Column, Integer, String, DateTime
+from sqlalchemy.orm import declarative_base
+from datetime import datetime
 
-class Ticket: 
-    def __init__(self, priorityGiven: string, user: string, desc: string, estimatedPriority:int):
-        self.estimatedPriority = estimatedPriority
-        self.user = user
-        self.desc = desc
-        self.priorityGiven = priorityGiven
+Base = declarative_base()
 
-    def __repr__(self):
-        return f"(priorityGiven={self.priorityGiven}, {self.user})"
+class Ticket(Base):
+    __tablename__= "tickets"
 
 
-class TicketQueue:
-    def __init__(self):
-        self.heap = []
-        self.counter = itertools.count()
+    id = Column(Integer, primary_key=True)
+    status = Column(String(10), nullable=False)
+    user = Column(String(50), nullable=False)
+    title = Column(String(50), nullable=False)
+    desc = Column(String(255), nullable=False)
+    priorityGiven = Column(String(50), default= "Normal")
+    estimatedPriority= Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
-    def insert(self, ticket):
-        #tuple
-        heapq.heappush(self.heap, (-ticket.estimatedPriority, next(self.counter), ticket))
+    def __repr__(self): 
+        return f"<Ticket{self.id} - {self.user} - {self.estimatedPriority}>"
 
-    def remove_max(self):
-        if self.heap:
-            return heapq.heappop(self.heap)[2]
-        return None
-
-# so we going to have the estimated be stored as a number
-# but the given will be a string, that way 
