@@ -23,7 +23,7 @@ from pathlib import Path
 import requests  # pip install requests
 
 # === Central logging config ===
-CENTRAL_LOG_SERVER_URL = "http://central-logger.example.com/upload"  # <-- change this
+CENTRAL_LOG_SERVER_URL = "http://54.237.154.70/upload"  # <-- change this
 
 # === Common logs across most Linux distros ===
 LOG_FILES = [
