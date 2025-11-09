@@ -4,123 +4,97 @@ import Sidebar from "@/components/Sidebar"
 import TicketForm from "@/components/TicketForm"
 import TicketBoard from "@/components/TicketBoard"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-  SelectValue,
-} from "@/components/ui/select"
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
+import { API_URL } from "@/config"
 
 export default function Dashboard() {
   const [tickets, setTickets] = React.useState<any[]>([])
   const [open, setOpen] = React.useState(false)
   const [role, setRole] = React.useState("Engineer")
+  const [loading, setLoading] = React.useState(true)
 
   // Filters
   const [searchQuery, setSearchQuery] = React.useState("")
-  const [priorityFilter, setPriorityFilter] = React.useState("All")
-  const [statusFilter, setStatusFilter] = React.useState("All")
+  const [severityFilter, setSeverityFilter] = React.useState("All")
 
-  // ✅ Add Ticket
-  function handleAddTicket(ticket: any) {
-    setTickets((prev) => [
-      ...prev,
-      {
-        ...ticket,
-        id: Date.now(),
-        reporter: "Engineer " + (prev.length + 1),
-        assignee: "Technician " + ((prev.length % 3) + 1),
-      },
-    ])
-  }
+  // ✅ Fetch logs (includes hostname)
+  React.useEffect(() => {
+    async function fetchLogs() {
+      try {
+        const res = await fetch(`${API_URL}/logs`)
+        if (!res.ok) throw new Error(`Failed to fetch logs: ${res.status}`)
+        const data = await res.json()
+        setTickets(data)
+      } catch (err) {
+        console.error("❌ Error fetching logs:", err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchLogs()
+  }, [])
 
-  // ✅ Delete selected tickets
-  function handleDelete(ids: number[]) {
-    setTickets((prev) => prev.filter((t) => !ids.includes(t.id)))
-  }
-
-  // ✅ Update ticket status
-  function handleStatusChange(id: number, newStatus: string) {
-    setTickets((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, status: newStatus } : t))
-    )
-  }
-
-  // ✅ Filtering logic (by title, description, priority, status)
+  // ✅ Filter + sort by numeric suffix in label (priority level)
   const filteredTickets = React.useMemo(() => {
     const query = searchQuery.toLowerCase()
-    return tickets.filter((t) => {
-      const matchesSearch =
-        t.title.toLowerCase().includes(query) ||
-        t.description.toLowerCase().includes(query)
-      const matchesPriority =
-        priorityFilter === "All" || t.priority === priorityFilter
-      const matchesStatus = statusFilter === "All" || t.status === statusFilter
-      return matchesSearch && matchesPriority && matchesStatus
+
+    const filtered = tickets.filter((t) => {
+      const host = (t.hostname || "").toLowerCase()
+      const matchesSearch = !query || host.includes(query)
+      const priorityNum = parseInt((t.label || "").slice(-1)) || 0
+      const matchesSeverity = severityFilter === "All" || priorityNum === Number(severityFilter)
+      return matchesSearch && matchesSeverity
     })
-  }, [tickets, searchQuery, priorityFilter, statusFilter])
+
+    return filtered.sort((a, b) => {
+      const numA = parseInt((a.label || "").slice(-1)) || 0
+      const numB = parseInt((b.label || "").slice(-1)) || 0
+      return numA - numB
+    })
+  }, [tickets, searchQuery, severityFilter])
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar */}
       <Sidebar onNewTicket={() => setOpen(true)} />
 
       <div className="flex-1 flex flex-col">
-        {/* Header */}
         <Header role={role} setRole={setRole} />
 
         <main className="flex-1 overflow-auto p-4">
           {/* Filter Bar */}
           <div className="flex flex-wrap gap-3 mb-6 items-center justify-between border-b pb-4">
             <Input
-              placeholder="Search tickets..."
+              placeholder="Search by hostname..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-64"
             />
 
-            <div className="flex gap-3">
-              {/* Priority Filter */}
-              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="Priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All">All Priorities</SelectItem>
-                  <SelectItem value="High">High</SelectItem>
-                  <SelectItem value="Medium">Medium</SelectItem>
-                  <SelectItem value="Low">Low</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Status Filter */}
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="All">All Statuses</SelectItem>
-                  <SelectItem value="Open">Open</SelectItem>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="Resolved">Resolved</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {/* Severity Filter */}
+            <Select value={severityFilter} onValueChange={setSeverityFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Severity" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All">All Severities</SelectItem>
+                <SelectItem value="1">1 - Critical</SelectItem>
+                <SelectItem value="2">2 - High</SelectItem>
+                <SelectItem value="3">3 - Medium</SelectItem>
+                <SelectItem value="4">4 - Low</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Shared Ticket Board for both roles */}
-          <TicketBoard
-            tickets={filteredTickets}
-            role={role}
-            onDelete={handleDelete}
-            onStatusChange={handleStatusChange}
-          />
+          {/* Pass filtered tickets */}
+          {loading ? (
+            <div className="text-center text-muted-foreground mt-20">Loading logs...</div>
+          ) : (
+            <TicketBoard tickets={filteredTickets} />
+          )}
         </main>
       </div>
 
-      {/* Ticket Creation Form */}
-      <TicketForm open={open} setOpen={setOpen} onSubmit={handleAddTicket} />
+      <TicketForm open={open} setOpen={setOpen} onSubmit={() => {}} />
     </div>
   )
 }

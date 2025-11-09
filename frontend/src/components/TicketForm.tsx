@@ -46,6 +46,8 @@ export default function TicketForm({ open, setOpen, onSubmit }: any) {
         body: JSON.stringify(payload),
       })
 
+      console.log(`${API_URL}/logs`)
+
       if (!res.ok) throw new Error(`Failed with ${res.status}`)
 
       const data = await res.json()
