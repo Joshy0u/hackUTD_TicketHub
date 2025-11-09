@@ -53,7 +53,7 @@ DB_NAME = os.environ.get("DB_NAME", "datacenter_db")
 
 # RDS user credentials (defaults to your provided values)
 DB_USER = os.environ.get("DB_USER", "postgres")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "cREDS :)")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "CREDS NO LEAK")
 
 # Door (entry) coordinates in our fixed layout
 ENTRY_X = 0
@@ -81,6 +81,9 @@ def ensure_database_exists():
     """
     Ensure the logical database DB_NAME exists on the RDS instance.
     Connects to the maintenance 'postgres' DB, creates DB_NAME if needed.
+
+    IMPORTANT: CREATE DATABASE must run outside a transaction,
+    so we use autocommit and DO NOT wrap this in "with conn:".
     """
     maintenance_db = "postgres"
     conn = psycopg2.connect(
@@ -91,12 +94,12 @@ def ensure_database_exists():
         password=DB_PASSWORD,
     )
     try:
-        with conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1 FROM pg_database WHERE datname = %s;", (DB_NAME,))
-                exists = cur.fetchone()
-                if not exists:
-                    cur.execute(f'CREATE DATABASE "{DB_NAME}";')
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s;", (DB_NAME,))
+            exists = cur.fetchone()
+            if not exists:
+                cur.execute(f'CREATE DATABASE "{DB_NAME}";')
     finally:
         conn.close()
 
@@ -662,32 +665,6 @@ def delete_server(hostname):
 def list_servers():
     """
     List all servers currently on racks in the (single) datacenter.
-
-    Returns JSON like:
-    {
-      "status": "ok",
-      "servers": [
-        {
-          "server_id": 1,
-          "hostname": "srv-1",
-          "serial_number": "SN-0001",
-          "slot": 1,
-          "rack": {
-            "id": 3,
-            "label": "R3"
-          },
-          "aisle": {
-            "id": 1,
-            "label": "A1"
-          },
-          "datacenter": {
-            "id": 1,
-            "name": "DC-FIXED"
-          }
-        },
-        ...
-      ]
-    }
     """
     ensure_datacenter_exists()
 
@@ -739,7 +716,7 @@ def list_servers():
                     "id": rack_id,
                     "label": rack_label,
                 },
-                    "aisle": {
+                "aisle": {
                     "id": aisle_id,
                     "label": aisle_label,
                 },
@@ -973,4 +950,3 @@ if __name__ == "__main__":
 
     # Bind to 0.0.0.0 so it’s reachable on EC2; default port 8000
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "8000")))
-
