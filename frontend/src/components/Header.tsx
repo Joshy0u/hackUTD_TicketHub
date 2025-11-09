@@ -16,7 +16,7 @@ interface HeaderProps {
 export default function Header({ role, setRole }: HeaderProps) {
   return (
     <header className="flex items-center justify-between bg-background border-b px-6 py-3 sticky top-0 z-40">
-      <h1 className="text-2xl font-semibold">Datacenter Ticketing</h1>
+      <h1 className="text-2xl font-semibold">Ticketeer</h1>
 
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon">

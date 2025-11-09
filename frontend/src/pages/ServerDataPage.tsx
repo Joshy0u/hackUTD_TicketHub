@@ -129,7 +129,7 @@ export default function ServerDataCenterPage() {
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-semibold text-foreground">
-        Data Center Overview
+        Ticketeer
       </h1>
 
       <Card className="p-6 bg-card border shadow-sm">
