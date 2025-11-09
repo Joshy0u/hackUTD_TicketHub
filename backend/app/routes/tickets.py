@@ -1,38 +1,41 @@
 from flask import Blueprint, jsonify, request
 from datetime import datetime
+from PQ import Ticket, TicketQueue
 
 tickets = Blueprint('tickets', __name__)
+ticket_queue = TicketQueue()
 
-open_tickets = [
-    {
-        'id': 1,
-        'datetime': datetime.now(),
-        'content': 'stuff',
-        'priority': 100
-    },
-    {
-        'id': 2,
-        'datetime': datetime.now(),
-        'content': 'more stuff',
-        'priority': 50
-    }
-]
+
+
 
 @tickets.route('/open', methods=['POST'])
 def upload_ticket():
     data = request.get_json()
     if not data:
         return jsonify({'error': 'No data provided'}), 400
-                        
-    open_tickets.append({
-        'id': len(open_tickets) + 1,
-        'datetime': datetime.now(),
-        'content': data.get('content'),
-        'priority': data.get('priority')
-    })
+    
+    t = Ticket(
+        priorityGiven=data.get('priorityGiven', 'Normal'),
+        user=data.get('user', 'Anonymous'),
+        desc=data.get('content', ''),
+        estimatedPriority=int(data.get('estimatedPriority', 0))
+    )
+
+    ticket_queue.insert(t)
 
     return jsonify({'message': 'Ticket uploaded successfully'}), 201
 
 @tickets.route('/', methods=['GET'])
 def get_tickets():
-    return jsonify(open_tickets), 200
+    tickets_list = [
+        {
+            "priorityGiven": t[2].priorityGiven,
+            "user": t[2].user,
+            "desc": t[2].desc,
+            "estimatedPriority": t[2].estimatedPriority
+        }
+        for t in ticket_queue.heap
+    ]
+
+
+    return jsonify(tickets_list), 200
