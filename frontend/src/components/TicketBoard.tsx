@@ -4,6 +4,13 @@ import { Card } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface Ticket {
   id: number
@@ -20,9 +27,15 @@ interface TicketBoardProps {
   tickets: Ticket[]
   role: string
   onDelete?: (ids: number[]) => void
+  onStatusChange?: (id: number, newStatus: string) => void
 }
 
-export default function TicketBoard({ tickets, role, onDelete }: TicketBoardProps) {
+export default function TicketBoard({
+  tickets,
+  role,
+  onDelete,
+  onStatusChange,
+}: TicketBoardProps) {
   const [selectedIds, setSelectedIds] = React.useState<number[]>([])
 
   function handleSelect(id: number, checked: boolean) {
@@ -134,20 +147,39 @@ export default function TicketBoard({ tickets, role, onDelete }: TicketBoardProp
                   </div>
                 </td>
 
+                {/* Editable status for technician */}
                 <td className="px-4 py-2">
-                  <Badge
-                    className={
-                      ticket.status === "Open"
-                        ? "bg-blue-500/20 text-blue-600"
-                        : ticket.status === "In Progress"
-                        ? "bg-yellow-500/20 text-yellow-600"
-                        : ticket.status === "Resolved"
-                        ? "bg-green-500/20 text-green-600"
-                        : "bg-muted/50 text-muted-foreground"
-                    }
-                  >
-                    {ticket.status}
-                  </Badge>
+                  {role === "Technician" ? (
+                    <Select
+                      value={ticket.status}
+                      onValueChange={(val) =>
+                        onStatusChange?.(ticket.id, val)
+                      }
+                    >
+                      <SelectTrigger className="h-7 w-[130px] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Open">Open</SelectItem>
+                        <SelectItem value="In Progress">In Progress</SelectItem>
+                        <SelectItem value="Resolved">Resolved</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Badge
+                      className={
+                        ticket.status === "Open"
+                          ? "bg-blue-500/20 text-blue-600"
+                          : ticket.status === "In Progress"
+                          ? "bg-yellow-500/20 text-yellow-600"
+                          : ticket.status === "Resolved"
+                          ? "bg-green-500/20 text-green-600"
+                          : "bg-muted/50 text-muted-foreground"
+                      }
+                    >
+                      {ticket.status}
+                    </Badge>
+                  )}
                 </td>
 
                 <td className="px-4 py-2">

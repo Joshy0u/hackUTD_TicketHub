@@ -17,10 +17,12 @@ export default function App() {
   const [open, setOpen] = React.useState(false)
   const [role, setRole] = React.useState("Engineer")
 
+  // Filters
   const [searchQuery, setSearchQuery] = React.useState("")
   const [priorityFilter, setPriorityFilter] = React.useState("All")
   const [statusFilter, setStatusFilter] = React.useState("All")
 
+  // ✅ Add Ticket
   function handleAddTicket(ticket: any) {
     setTickets((prev) => [
       ...prev,
@@ -33,10 +35,19 @@ export default function App() {
     ])
   }
 
+  // ✅ Delete selected tickets
   function handleDelete(ids: number[]) {
     setTickets((prev) => prev.filter((t) => !ids.includes(t.id)))
   }
 
+  // ✅ Update ticket status
+  function handleStatusChange(id: number, newStatus: string) {
+    setTickets((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, status: newStatus } : t))
+    )
+  }
+
+  // ✅ Filtering logic (by title, description, priority, status)
   const filteredTickets = React.useMemo(() => {
     const query = searchQuery.toLowerCase()
     return tickets.filter((t) => {
@@ -52,12 +63,15 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-background">
+      {/* Sidebar */}
       <Sidebar onNewTicket={() => setOpen(true)} />
+
       <div className="flex-1 flex flex-col">
+        {/* Header */}
         <Header role={role} setRole={setRole} />
 
         <main className="flex-1 overflow-auto p-4">
-          {/* Filters */}
+          {/* Filter Bar */}
           <div className="flex flex-wrap gap-3 mb-6 items-center justify-between border-b pb-4">
             <Input
               placeholder="Search tickets..."
@@ -67,6 +81,7 @@ export default function App() {
             />
 
             <div className="flex gap-3">
+              {/* Priority Filter */}
               <Select value={priorityFilter} onValueChange={setPriorityFilter}>
                 <SelectTrigger className="w-[150px]">
                   <SelectValue placeholder="Priority" />
@@ -79,6 +94,7 @@ export default function App() {
                 </SelectContent>
               </Select>
 
+              {/* Status Filter */}
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger className="w-[150px]">
                   <SelectValue placeholder="Status" />
@@ -93,15 +109,17 @@ export default function App() {
             </div>
           </div>
 
-          {/* Unified Ticket Board */}
+          {/* Shared Ticket Board for both roles */}
           <TicketBoard
             tickets={filteredTickets}
             role={role}
             onDelete={handleDelete}
+            onStatusChange={handleStatusChange}
           />
         </main>
       </div>
 
+      {/* Ticket Creation Form */}
       <TicketForm open={open} setOpen={setOpen} onSubmit={handleAddTicket} />
     </div>
   )
