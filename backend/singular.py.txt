@@ -1,0 +1,127 @@
+"""
+Train a model that takes a log line (text) and predicts its full tag, e.g.:
+
+    BAD_LOG_FAILED_SSH_LOGIN_2
+    BAD_LOG_KERNEL_OOPS_1
+    GOOD_LOG
+
+Input: CSV file with columns 'text' and 'tag'
+Works on Windows, shows progress bars.
+"""
+
+import sys
+from pathlib import Path
+
+import joblib
+import pandas as pd
+from tqdm import tqdm
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.metrics import classification_report
+
+# ===================== CONFIG =====================
+DATA_PATH = "labeled_logs.csv"   # <-- your CSV path here
+MODEL_PATH = "log_reason_full.pkl"
+TEXT_COL = "text"
+TAG_COL = "tag"
+TEST_SIZE = 0.2
+RANDOM_STATE = 42
+MAX_FEATURES = 50000
+# ==================================================
+
+
+def load_csv(path: str) -> pd.DataFrame:
+    """Load a CSV with columns TEXT_COL and TAG_COL."""
+    p = Path(path)
+    if not p.exists():
+        print(f"[ERROR] File not found: {p.resolve()}")
+        sys.exit(1)
+
+    print(f"\n[+] Reading CSV from {p.resolve()} ...")
+    df = pd.read_csv(p)
+
+    if not {TEXT_COL, TAG_COL}.issubset(df.columns):
+        print(f"[ERROR] CSV must contain columns '{TEXT_COL}' and '{TAG_COL}'.")
+        print(f"Columns found: {list(df.columns)}")
+        sys.exit(1)
+
+    df = df.dropna(subset=[TEXT_COL, TAG_COL])
+    print(f"[+] Loaded {len(df):,} rows")
+    print(f"[+] Using '{TEXT_COL}' as input text and '{TAG_COL}' as label/tag.")
+    print("[+] Example rows:")
+    print(df[[TEXT_COL, TAG_COL]].head(5))
+    return df
+
+
+def train_model(df: pd.DataFrame):
+    """Train a multi-class classifier that predicts full tags."""
+    X = df[TEXT_COL]
+    y = df[TAG_COL]
+
+    print("\n[+] Splitting train/test...")
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=TEST_SIZE,
+        random_state=RANDOM_STATE,
+        stratify=y,
+    )
+
+    print(f"[+] Number of unique tags: {len(set(y))}")
+    print("[+] Building TF-IDF + LogisticRegression pipeline...")
+
+    model = make_pipeline(
+        TfidfVectorizer(max_features=MAX_FEATURES, ngram_range=(1, 2)),
+        LogisticRegression(max_iter=1000, multi_class="ovr", n_jobs=-1),
+    )
+
+    print("\n[+] Training model (this may take a while)...")
+    for _ in tqdm(range(1), desc="Model training progress", ncols=80):
+        model.fit(X_train, y_train)
+
+    acc = model.score(X_test, y_test)
+    print(f"\n[+] Accuracy on test set: {acc:.4f}")
+
+    print("\n[+] Classification report (truncated):")
+    y_pred = model.predict(X_test)
+    print(classification_report(y_test, y_pred, zero_division=0))
+
+    return model
+
+
+def demo_predictions(model):
+    """Show a few example predictions."""
+    examples = [
+        "Nov 08 13:42:01 auth01 sshd[2222]: Failed password for root from 203.0.113.5 port 40422 ssh2",
+        "Nov 08 13:45:27 web01 nginx[3333]: SSL_do_handshake() failed (SSL: error:14094418:SSL routines:ssl3_read_bytes:tlsv1 alert unknown ca)",
+        "Nov 08 14:00:01 cron[2045]: (root) CMD (cd / && run-parts --report /etc/cron.hourly)",
+        "198.51.100.23 - - [08/Nov/2025:13:45:27 +0000] \"GET /etc/passwd HTTP/1.1\" 404 512 \"-\" \"sqlmap/1.7\"",
+    ]
+
+    print("\n[+] Demo predictions:")
+    for log in tqdm(examples, desc="Predicting examples", ncols=80):
+        pred = model.predict([log])[0]
+        print(f"\nTEXT: {log}")
+        print(f" → Predicted tag: {pred}")
+        print("-" * 70)
+
+
+def main():
+    print("[*] Starting training (CSV with text/tag, with progress)...")
+
+    # Allow: python script.py myfile.csv
+    data_path = sys.argv[1] if len(sys.argv) > 1 else DATA_PATH
+
+    df = load_csv(data_path)
+    model = train_model(df)
+    demo_predictions(model)
+
+    print(f"\n[+] Saving model to {MODEL_PATH}")
+    joblib.dump(model, MODEL_PATH)
+    print("[*] Training complete! Model saved as log_reason_full.pkl\n")
+
+
+if __name__ == "__main__":
+    main()
