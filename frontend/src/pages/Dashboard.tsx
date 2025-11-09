@@ -5,7 +5,7 @@ import TicketForm from "@/components/TicketForm"
 import TicketBoard from "@/components/TicketBoard"
 import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
-import { API_URL } from "@/config"
+import { API_URL, SERVERS_URL } from "@/config"
 
 export default function Dashboard() {
   const [tickets, setTickets] = React.useState<any[]>([])
@@ -24,6 +24,7 @@ export default function Dashboard() {
         const res = await fetch(`${API_URL}/logs`)
         if (!res.ok) throw new Error(`Failed to fetch logs: ${res.status}`)
         const data = await res.json()
+      console.log(data)
         setTickets(data)
       } catch (err) {
         console.error("❌ Error fetching logs:", err)
@@ -33,6 +34,8 @@ export default function Dashboard() {
     }
     fetchLogs()
   }, [])
+
+
 
   // ✅ Filter + sort by numeric suffix in label (priority level)
   const filteredTickets = React.useMemo(() => {
