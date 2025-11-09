@@ -11,6 +11,7 @@ Behavior:
 - On later runs: resumes from saved offsets like before.
 - Output files contain ONLY raw new log lines (no headers).
 - Snapshot filenames include the machine's hostname and timestamp.
+- Each non-empty snapshot is sent to a central logging server via HTTP POST.
 """
 
 import json
@@ -18,6 +19,11 @@ import time
 import socket
 from datetime import datetime
 from pathlib import Path
+
+import requests  # pip install requests
+
+# === Central logging config ===
+CENTRAL_LOG_SERVER_URL = "http://central-logger.example.com/upload"  # <-- change this
 
 # === Common logs across most Linux distros ===
 LOG_FILES = [
@@ -92,6 +98,29 @@ def save_offsets(state_file: Path, offsets: dict) -> None:
         print(f"[warn] Failed to save state to {state_file}: {e}")
 
 
+def send_to_central_server(file_path: Path, hostname: str, ts: str) -> None:
+    """Upload the snapshot file to the central logging server."""
+    try:
+        with file_path.open("rb") as fh:
+            files = {"file": (file_path.name, fh, "text/plain")}
+            data = {"hostname": hostname, "timestamp": ts}
+            resp = requests.post(
+                CENTRAL_LOG_SERVER_URL,
+                data=data,
+                files=files,
+                timeout=10,
+            )
+        if resp.ok:
+            print(f"[send] Uploaded {file_path} to central server ({resp.status_code}).")
+        else:
+            print(
+                f"[send] Failed to upload {file_path}: "
+                f"status={resp.status_code}, body={resp.text[:200]}"
+            )
+    except Exception as e:
+        print(f"[send] Error uploading {file_path} to central server: {e}")
+
+
 def tail_once(offsets: dict, dest_dir: Path, hostname: str) -> None:
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest_file = dest_dir / f"logs_{hostname}_{ts}.log"
@@ -142,6 +171,8 @@ def tail_once(offsets: dict, dest_dir: Path, hostname: str) -> None:
         print("[tick] No new entries in any common logs.")
     else:
         print(f"[tick] New data written to {dest_file}")
+        # Send to central logging server
+        send_to_central_server(dest_file, hostname, ts)
 
 
 def main():
