@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 from datetime import datetime
-from PQ import Ticket, TicketQueue
+from app.PQ import Ticket, TicketQueue
 
 tickets = Blueprint('tickets', __name__)
 ticket_queue = TicketQueue()
