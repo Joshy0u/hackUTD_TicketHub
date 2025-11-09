@@ -17,7 +17,7 @@ class BadLog(Base):
     )
 
     # When it was uploaded (optional text timestamp)
-    uploadts = Column(Text, nullable=False)
+    upload_ts = Column(Text, nullable=False)
 
     # Machine / host name
     hostname = Column(Text, nullable=False, index=True)
@@ -41,7 +41,7 @@ class BadLog(Base):
         return {
             "id": self.id,
             "logged_at": self.logged_at.isoformat() if self.logged_at else None,
-            "uploadts": self.uploadts,
+            "upload_ts": self.upload_ts,
             "hostname": self.hostname,
             "label": self.label,
             "log_line": self.log_line,

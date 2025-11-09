@@ -47,7 +47,7 @@ def create_log():
 
     # Create new BadLog entry
     new_log = BadLog(
-        uploadts=data.get('upload_ts'),
+        upload_ts=data.get('upload_ts'),
         hostname=data.get('hostname'),
         label=data.get('label'),
         log_line=data.get('log_line'),
@@ -72,8 +72,8 @@ def update_log(log_id):
             return jsonify({'error': 'Log not found'}), 404
 
         # Update fields if provided
-        if 'uploadts' in data:
-            log.uploadts = data['uploadts']
+        if 'upload_ts' in data:
+            log.upload_ts = data['upload_ts']
         if 'hostname' in data:
             log.hostname = data['hostname']
         if 'label' in data:
