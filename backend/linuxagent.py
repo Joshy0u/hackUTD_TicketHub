@@ -1,87 +1,117 @@
 #!/usr/bin/env python3
 """
-collect_logs.py
+tail_common_logs.py
 
-- Checks for a set of common Linux log files.
-- If a log file exists on this system, copies it into a "collected_logs"
-  directory that lives in the same directory as this script.
-- Each run creates timestamped copies so you can keep snapshots over time.
+Tails only the most common Linux log files (not recursive).
+Reads new lines every minute and writes them to timestamped snapshots.
 """
 
 import os
-import shutil
+import json
+import time
 from datetime import datetime
 from pathlib import Path
 
-# =========================
-# Log files to collect
-# =========================
-LOG_FILES = {
-    # --- Core system logs ---
-    "syslog": "/var/log/syslog",             # Ubuntu/Debian general system log
-    "messages": "/var/log/messages",         # RHEL/CentOS general system log
-    "dmesg": "/var/log/dmesg",               # Kernel/hardware events
-    "auth": "/var/log/auth.log",             # SSH logins, sudo attempts, auth failures
-    "secure": "/var/log/secure",             # RHEL/CentOS security log (SSH, sudo)
-    "cron": "/var/log/cron.log",             # Debian/Ubuntu cron log (if present)
-    "cron_alt": "/var/log/cron",             # RHEL/CentOS cron log
-    "boot": "/var/log/boot.log",             # Boot-time service issues
+# === Common logs across most Linux distros ===
+LOG_FILES = [
+    "/var/log/syslog",
+    "/var/log/messages",
+    "/var/log/dmesg",
+    "/var/log/auth.log",
+    "/var/log/secure",
+    "/var/log/ufw.log",
+    "/var/log/fail2ban.log",
+    "/var/log/cron.log",
+    "/var/log/cron",
+    "/var/log/boot.log",
+    "/var/log/kern.log",
+    "/var/log/mysql/error.log",
+    "/var/log/postgresql/postgresql.log",
+    "/var/log/nginx/error.log",
+    "/var/log/apache2/error.log",
+    "/var/log/smartd.log",
+    "/var/log/dpkg.log",
+    "/var/log/apt/history.log",
+]
 
-    # --- Data & application logs (examples, adjust for your setup) ---
-    "etl": "/var/log/etl.log",               # Your ETL / data pipeline jobs
-    "db_backup": "/var/log/db_backup.log",   # Database or file backup jobs
-    "app_main": "/opt/myapp/logs/app.log",   # Custom application logs (change path)
+def load_offsets(state_file: Path):
+    if not state_file.exists():
+        return {}
+    try:
+        with state_file.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
-    # --- Database logs ---
-    "mysql": "/var/log/mysql/error.log",                     # MySQL / MariaDB errors
-    "postgresql": "/var/log/postgresql/postgresql.log",      # PostgreSQL server logs
+def save_offsets(state_file: Path, offsets: dict):
+    with state_file.open("w", encoding="utf-8") as f:
+        json.dump(offsets, f, indent=2, sort_keys=True)
 
-    # --- Security & network logs ---
-    "ufw": "/var/log/ufw.log",               # Ubuntu UFW firewall events
-    "firewalld": "/var/log/firewalld",       # firewalld log (varies by distro)
-    "fail2ban": "/var/log/fail2ban.log",     # Banned IPs / brute-force protection
+def tail_once(offsets, dest_dir):
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    dest_file = dest_dir / f"logs_{ts}.log"
 
-    # --- Storage & hardware ---
-    "smartd": "/var/log/smartd.log",         # Disk SMART health monitoring
-    "disk_monitor": "/var/log/disk_monitor.log",  # Custom disk-space monitor scripts
-}
+    written = False
+    with dest_file.open("w", encoding="utf-8", errors="replace") as out:
+        for log_path in LOG_FILES:
+            src = Path(log_path)
+            if not src.exists():
+                continue
+
+            key = str(src)
+            old_off = offsets.get(key, 0)
+            try:
+                size = src.stat().st_size
+            except OSError:
+                continue
+
+            # Handle rotation/truncate
+            if size < old_off:
+                old_off = 0
+
+            if size == old_off:
+                continue  # no new data
+
+            try:
+                with src.open("rb") as f:
+                    f.seek(old_off)
+                    data = f.read()
+            except Exception:
+                continue
+
+            if not data:
+                continue
+
+            out.write(f"\n===== {log_path} @ {ts} =====\n")
+            out.write(data.decode("utf-8", errors="replace"))
+            offsets[key] = size
+            written = True
+            print(f"[ok] Collected new entries from {log_path}")
+
+    if not written:
+        dest_file.unlink(missing_ok=True)
+        print("[tick] No new entries in any common logs.")
+    else:
+        print(f"[tick] New data written to {dest_file}")
 
 def main():
-    # Directory where this script lives
     script_dir = Path(__file__).resolve().parent
-
-    # Directory where we’ll drop collected log snapshots
-    dest_dir = script_dir / "collected_logs"
+    dest_dir = script_dir / "tailed_logs"
     dest_dir.mkdir(exist_ok=True)
+    state_file = script_dir / ".log_offsets.json"
 
-    # Timestamp to append to copied filenames
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    offsets = load_offsets(state_file)
+    print(f"[init] Watching {len(LOG_FILES)} common logs...")
 
-    print(f"[collector] Saving logs into: {dest_dir}")
-    print(f"[collector] Timestamp: {ts}")
-
-    for log_name, log_path in LOG_FILES.items():
-        src = Path(log_path)
-
-        if not src.exists():
-            print(f"[skip] {log_name}: {src} (does not exist on this system)")
-            continue
-
-        # Choose an extension: keep original suffix if present, else ".log"
-        suffix = src.suffix if src.suffix else ".log"
-        dest_filename = f"{log_name}_{ts}{suffix}"
-        dest = dest_dir / dest_filename
-
+    while True:
         try:
-            shutil.copy2(src, dest)
-            print(f"[ok]   {log_name}: copied {src} -> {dest}")
-        except PermissionError as e:
-            print(f"[err]  {log_name}: permission denied reading {src}: {e}")
-        except Exception as e:
-            print(f"[err]  {log_name}: failed to copy {src}: {e}")
-
-    print("[collector] Done.")
-
+            tail_once(offsets, dest_dir)
+            save_offsets(state_file, offsets)
+            print("[loop] Sleeping 60 seconds...\n")
+            time.sleep(60)
+        except KeyboardInterrupt:
+            print("Exiting.")
+            break
 
 if __name__ == "__main__":
     main()
