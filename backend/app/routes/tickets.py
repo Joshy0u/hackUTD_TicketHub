@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request
 from sqlalchemy import desc
 from datetime import datetime
+from ..database import get_db
 from ..models import BadLog  # updated import
 
 bad_logs = Blueprint('bad_logs', __name__)
