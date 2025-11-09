@@ -39,7 +39,7 @@ def make_app():
         token = oauth.auth0.authorize_access_token()
         session["user"] = token
         # 👇 Redirect to the frontend root after successful login
-        return redirect(f"{frontend_url}/")
+        return redirect(f"{frontend_url}/dashboard")
 
     @app.route("/logout")
     def logout():
