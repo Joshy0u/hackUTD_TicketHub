@@ -17,7 +17,7 @@ def make_app():
     # Enable CORS
     CORS(app)
 
-    # --- Initialize OAuth / Auth0 ---
+    # init auth0
     oauth = OAuth(app)
     oauth.register(
         "auth0",
@@ -38,13 +38,12 @@ def make_app():
     def callback():
         token = oauth.auth0.authorize_access_token()
         session["user"] = token
-        # 👇 Redirect to the frontend root after successful login
+        # 
         return redirect(f"{frontend_url}/dashboard")
 
     @app.route("/logout")
     def logout():
         session.clear()
-        # 👇 Redirect to the frontend root after logout
         return redirect(
             f"https://{app.config['AUTH0_DOMAIN']}/v2/logout?"
             + urlencode(
@@ -55,8 +54,6 @@ def make_app():
                 quote_via=quote_plus,
             )
         )
-
-    # --- Register blueprints ---
     # The tickets module exposes the `bad_logs` blueprint (reflecting the bad_logs table)
     from .routes.tickets import bad_logs
     app.register_blueprint(bad_logs)

@@ -17,7 +17,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = React.useState("")
   const [severityFilter, setSeverityFilter] = React.useState("All")
 
-  // ✅ Fetch logs (includes hostname)
+
   React.useEffect(() => {
     async function fetchLogs() {
       try {
@@ -35,9 +35,6 @@ export default function Dashboard() {
     fetchLogs()
   }, [])
 
-
-
-  // ✅ Filter + sort by numeric suffix in label (priority level)
   const filteredTickets = React.useMemo(() => {
     const query = searchQuery.toLowerCase()
 
@@ -64,7 +61,7 @@ export default function Dashboard() {
         <Header role={role} setRole={setRole} />
 
         <main className="flex-1 overflow-auto p-4">
-          {/* Filter Bar */}
+
           <div className="flex flex-wrap gap-3 mb-6 items-center justify-between border-b pb-4">
             <Input
               placeholder="Search by hostname..."
@@ -73,7 +70,7 @@ export default function Dashboard() {
               className="w-64"
             />
 
-            {/* Severity Filter */}
+
             <Select value={severityFilter} onValueChange={setSeverityFilter}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Severity" />
@@ -88,7 +85,7 @@ export default function Dashboard() {
             </Select>
           </div>
 
-          {/* Pass filtered tickets */}
+
           {loading ? (
             <div className="text-center text-muted-foreground mt-20">Loading logs...</div>
           ) : (

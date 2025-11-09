@@ -25,11 +25,11 @@ engine = create_engine(
     echo=True             
 )
 
-# --- ORM Setup ---
+# ORM
 SessionLocal = scoped_session(sessionmaker(bind=engine))
 Base = declarative_base()
 
-# --- get_db helper function ---
+# db context
 @contextmanager
 def get_db():
     """Provide a transactional scope for database operations."""

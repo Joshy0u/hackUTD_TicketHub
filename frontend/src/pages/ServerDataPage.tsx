@@ -56,7 +56,7 @@ export default function ServerDataCenterPage() {
     RACK_LABELS.slice(i * RACKS_PER_AISLE, (i + 1) * RACKS_PER_AISLE)
   )
 
-  // ---------------- STATES ----------------
+  // states
   if (loading)
     return (
       <div className="h-[80vh] flex items-center justify-center text-muted-foreground">
@@ -71,7 +71,7 @@ export default function ServerDataCenterPage() {
       </div>
     )
 
-  // ---------------- RACK DETAIL VIEW ----------------
+    // rack
   if (selectedRack) {
     const rackServers = racks[selectedRack]
     return (
@@ -125,7 +125,7 @@ export default function ServerDataCenterPage() {
     )
   }
 
-  // ---------------- DATA CENTER OVERVIEW ----------------
+  // OVERVIEW
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-semibold text-foreground">

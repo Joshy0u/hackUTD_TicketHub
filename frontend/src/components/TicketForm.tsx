@@ -82,7 +82,6 @@ export default function TicketForm({ open, setOpen, onSubmit }: any) {
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Hostname */}
           <div className="space-y-2">
             <Label>Hostname</Label>
             <Input
@@ -93,7 +92,6 @@ export default function TicketForm({ open, setOpen, onSubmit }: any) {
             />
           </div>
 
-          {/* Title */}
           <div className="space-y-2">
             <Label>Reason</Label>
             <Input
@@ -104,7 +102,6 @@ export default function TicketForm({ open, setOpen, onSubmit }: any) {
             />
           </div>
 
-          {/* Description */}
           <div className="space-y-2">
             <Label>Log Details</Label>
             <Textarea
@@ -115,7 +112,6 @@ export default function TicketForm({ open, setOpen, onSubmit }: any) {
             />
           </div>
 
-          {/* Priority */}
           <div className="space-y-2">
             <Label>Severity</Label>
             <Select
@@ -135,7 +131,6 @@ export default function TicketForm({ open, setOpen, onSubmit }: any) {
             </Select>
           </div>
 
-          {/* Submit */}
           <Button
             onClick={handleSubmit}
             disabled={loading}
