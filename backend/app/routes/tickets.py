@@ -47,7 +47,7 @@ def create_log():
 
     # Create new BadLog entry
     new_log = BadLog(
-        uploadts=data.get('uploadts'),
+        uploadts=data.get('upload_ts'),
         hostname=data.get('hostname'),
         label=data.get('label'),
         log_line=data.get('log_line'),
